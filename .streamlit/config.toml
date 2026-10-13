@@ -1,0 +1,16 @@
+[theme]
+base = "light"
+primaryColor = "#101918"
+backgroundColor = "#edece7"
+secondaryBackgroundColor = "#e1e0da"
+textColor = "#101918"
+linkColor = "#101918"
+borderColor = "#d2d1ca"
+baseRadius = "4px"
+buttonRadius = "4px"
+
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false
