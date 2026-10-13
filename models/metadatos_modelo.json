@@ -1,0 +1,168 @@
+{
+  "role": "BEST_MODEL del experimento principal (hipotesis)",
+  "selection_criterion": "mayor F1 ponderada en validacion cruzada de train (pre-registrado antes del test)",
+  "experiment_version": "0.1.0",
+  "variant": "original",
+  "representation": "rms",
+  "classifier": "svm_rbf",
+  "members": null,
+  "classes": [
+    "NORMAL",
+    "CREPITANTE",
+    "SIBILANCIA"
+  ],
+  "class_encoding": {
+    "NORMAL": 0,
+    "CREPITANTE": 1,
+    "SIBILANCIA": 2
+  },
+  "label_mode": "3class",
+  "feature_names": [
+    "rms_mean",
+    "rms_std",
+    "rms_median",
+    "rms_min",
+    "rms_max",
+    "rms_p25",
+    "rms_p75"
+  ],
+  "n_features": 7,
+  "scaler": {
+    "type": "StandardScaler (ajustado solo con train, dentro del pipeline)",
+    "mean": [
+      0.07685461869105563,
+      0.059533947868593805,
+      0.05947180552260078,
+      0.0157633107220891,
+      0.37861067380408,
+      0.03916087094975522,
+      0.0947481485208224
+    ],
+    "scale": [
+      0.013379712463630738,
+      0.016063055005652215,
+      0.022551720428208424,
+      0.012450996895856709,
+      0.158922253087165,
+      0.018891651389537075,
+      0.025648350621270567
+    ]
+  },
+  "hyperparameters": {
+    "C": 10,
+    "gamma": 1
+  },
+  "probability_calibration": "sigmoid",
+  "sample_rate": 8000,
+  "preprocessing": {
+    "target_sr": 8000,
+    "mono": "mean",
+    "resample_kaiser_beta": 8.0,
+    "bandpass_low_hz": 100.0,
+    "bandpass_high_hz": 2000.0,
+    "bandpass_order": 4,
+    "zero_phase": true,
+    "normalization_method": "rms",
+    "normalization_target": 0.1,
+    "silence_rms_threshold": 1e-06
+  },
+  "features": {
+    "representations": [
+      "mfcc",
+      "mel",
+      "wavelet",
+      "rms"
+    ],
+    "n_jobs": -1,
+    "stft_window_sec": 0.064,
+    "stft_hop_sec": 0.016,
+    "stft_window": "hann",
+    "n_mels": 64,
+    "mel_fmin_hz": 100.0,
+    "mel_fmax_hz": 2000.0,
+    "mel_htk": false,
+    "mel_norm": "slaney",
+    "mel_power": 2.0,
+    "mel_amin": 1e-10,
+    "n_mfcc": 13,
+    "wavelet_name": "db4",
+    "wavelet_level": 7,
+    "wavelet_mode": "zero",
+    "rms_frame_sec": 0.02,
+    "rms_hop_sec": 0.01,
+    "constant_std_threshold": 1e-10
+  },
+  "descriptors": null,
+  "features_fingerprint": "7683a571808246ceee0ca70633ba811e7bc23b6a2054bf2f02b85dbaa757f669",
+  "descriptors_fingerprint": "ddfc5c7c5b0387f47f1cd2f62df8d09084df4e143dd19eec1ad8bf5ddc6fad75",
+  "split_manifest_sha256": "dae239ab30af1d46a425a3a8d741cefb19b4f3526cd6ffebbc2208ba4a0e95d2",
+  "cv": {
+    "splitter": "StratifiedGroupKFold",
+    "n_splits": 5,
+    "shuffle": true,
+    "random_state": 42,
+    "reason": "5 folds: cada clase tiene >= 4 pacientes y >= 109 ciclos en todo fold; 10 folds NO viable: la clase SIBILANCIA queda con 1 paciente(s) en algun fold (minimo exigido 2)",
+    "scoring": "f1_weighted"
+  },
+  "cv_scores": {
+    "cv_search_f1_weighted": 0.525641377275895,
+    "cv_search_f1_weighted_std": 0.029966172843859232,
+    "cv_fit_f1_weighted": 0.7114542459500275,
+    "cv_search_accuracy": 0.5640092947522835,
+    "cv_search_accuracy_std": 0.028417271298582254,
+    "cv_fit_accuracy": 0.7312174767409962,
+    "cv_search_precision_weighted": 0.5189278508602216,
+    "cv_search_precision_weighted_std": 0.0309254376345825,
+    "cv_fit_precision_weighted": 0.7440422692945065,
+    "cv_search_recall_weighted": 0.5640092947522835,
+    "cv_search_recall_weighted_std": 0.028417271298582254,
+    "cv_fit_recall_weighted": 0.7312174767409962,
+    "cv_f1_weighted": 0.525641377275895,
+    "cv_f1_weighted_std": 0.029966172843859232,
+    "cv_accuracy": 0.5640092947522835,
+    "cv_accuracy_std": 0.028417271298582254,
+    "cv_precision_weighted": 0.5189278508602216,
+    "cv_precision_weighted_std": 0.0309254376345825,
+    "cv_recall_weighted": 0.5640092947522835,
+    "cv_recall_weighted_std": 0.028417271298582254
+  },
+  "train_scores": {
+    "train_f1_weighted": 0.6967641779587724,
+    "train_accuracy": 0.7199006098938333,
+    "train_precision_weighted": 0.734709529446897,
+    "train_recall_weighted": 0.7199006098938333
+  },
+  "test_scores": {
+    "test_accuracy": 0.5287531806615776,
+    "test_precision_weighted": 0.4876775355232454,
+    "test_recall_weighted": 0.5287531806615776,
+    "test_f1_weighted": 0.5018230114162672,
+    "test_auc_roc_weighted": 0.59816256622475,
+    "test_f1_macro": 0.38587059364790727,
+    "test_f1_NORMAL": 0.6479570780024763,
+    "test_recall_NORMAL": 0.7097649186256781,
+    "test_precision_NORMAL": 0.5960516324981018,
+    "test_auc_NORMAL": 0.5759714710953272,
+    "test_f1_CREPITANTE": 0.4194690265486726,
+    "test_recall_CREPITANTE": 0.4065180102915952,
+    "test_precision_CREPITANTE": 0.43327239488117003,
+    "test_auc_CREPITANTE": 0.6427133470521506,
+    "test_f1_SIBILANCIA": 0.09018567639257294,
+    "test_recall_SIBILANCIA": 0.06159420289855073,
+    "test_precision_SIBILANCIA": 0.16831683168316833,
+    "test_auc_SIBILANCIA": 0.5929822980753554
+  },
+  "source_model_file": "models/candidates/rms__svm_rbf.joblib",
+  "frozen_at_utc": "2026-10-08T00:55:08+00:00",
+  "python": "3.13.2",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "libraries": {
+    "numpy": "2.5.3",
+    "pandas": "3.0.6",
+    "scikit-learn": "1.9.1",
+    "joblib": "1.6.0",
+    "librosa": "1.0.0",
+    "PyWavelets": "1.10.0",
+    "scipy": "1.18.1"
+  }
+}

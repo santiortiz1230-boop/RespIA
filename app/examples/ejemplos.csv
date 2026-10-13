@@ -1,0 +1,7 @@
+file,label,cycle_id,patient_id,equipment,sample_rate,duration_sec
+normal_1.wav,NORMAL,113_1b1_Ll_sc_Litt3200_c006,113,Litt3200,4000,1.345
+normal_2.wav,NORMAL,202_1b1_Ar_sc_Meditron_c006,202,Meditron,44100,1.853
+crepitante_1.wav,CREPITANTE,174_2p3_Pl_mc_AKGC417L_c002,174,AKGC417L,44100,4.424
+crepitante_2.wav,CREPITANTE,174_2p3_Ar_mc_AKGC417L_c003,174,AKGC417L,44100,4.824
+sibilancia_1.wav,SIBILANCIA,192_2b1_Al_mc_LittC2SE_c007,192,LittC2SE,44100,2.9
+sibilancia_2.wav,SIBILANCIA,139_1b1_Pr_sc_Litt3200_c005,139,Litt3200,4000,2.148

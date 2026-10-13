@@ -1,0 +1,341 @@
+# =====================================================================
+# RespIA - archivo UNICO de configuracion del proyecto.
+#
+# - Las rutas relativas se resuelven respecto a la carpeta de ESTE archivo.
+# - Para usar otro archivo:  RESPIA_CONFIG=/ruta/a/otro_config.yaml
+# - Los parametros de preprocesamiento y caracteristicas se agregaran en
+#   las fases 3 y 4, DESPUES de la auditoria (no se fijan a ciegas).
+# =====================================================================
+
+project:
+  name: RespIA
+  experiment_version: "0.1.0"
+  random_state: 42
+
+paths:
+  data_dir: data          # DATA_DIR    -> datos crudos (raw/icbhi, raw/fraiwan)
+  output_dir: data        # OUTPUT_DIR  -> artefactos intermedios (processed/, features/)
+  results_dir: results    # RESULTS_DIR -> tablas, figuras, manifiestos del experimento
+  model_dir: models       # MODEL_DIR   -> modelos entrenados y metadatos
+  icbhi_subdir: raw/icbhi        # relativo a data_dir
+  fraiwan_subdir: raw/fraiwan    # relativo a data_dir
+
+icbhi:
+  audio_extension: .wav
+  annotation_extension: .txt
+  # Archivo incluido en el dataset que lista grabaciones renombradas.
+  filename_corrections_file: filename_differences.txt
+  # Codigos validos segun filename_format.txt (incluido en el dataset).
+  known_chest_locations: [Tc, Al, Ar, Pl, Pr, Ll, Lr]
+  known_acquisition_modes: [sc, mc]
+  known_equipment: [AKGC417L, LittC2SE, Litt3200, Meditron]
+  # Tolerancia numerica (s) SOLO para error de representacion en coma flotante
+  # al comparar el fin de ciclo con la duracion del audio.
+  time_tolerance_sec: 1.0e-6
+
+labels:
+  # (crackles, wheezes) -> etiqueta acustica del ciclo.
+  # El diagnostico clinico del paciente NO se usa como variable objetivo.
+  mapping:
+    NORMAL: [0, 0]
+    CREPITANTE: [1, 0]
+    SIBILANCIA: [0, 1]
+    AMBOS: [1, 1]
+  # Experimento principal: 3 clases. Cambiar a "4class" para incluir AMBOS.
+  label_mode: 3class
+  modes:
+    3class: [NORMAL, CREPITANTE, SIBILANCIA]
+    4class: [NORMAL, CREPITANTE, SIBILANCIA, AMBOS]
+
+segmentation:
+  # Los ciclos se extraen BAJO DEMANDA del WAV original (no se duplican en disco).
+  # Intervalo semiabierto [round(inicio*sr), round(fin*sr)) a la frecuencia nativa.
+  # Duraciones atipicas: cercas de Tukey sobre log(duracion) -> SOLO informativo,
+  # ningun ciclo se excluye por su duracion.
+  duration_outlier_iqr_k:
+    mild: 1.5
+    extreme: 3.0
+  # Meseta (senal plana): racha de muestras identicas en el original >= este valor
+  # (saturacion en el tope o corte de senal). 20 ms = 1 trama RMS. Solo se marca.
+  flatline_min_sec: 0.020
+  # Ciclos elegidos al azar (semilla del proyecto) para comprobar que la lectura
+  # parcial de un ciclo es identica al recorte de la grabacion completa.
+  consistency_check_cycles: 300
+
+preprocessing:
+  # UNA sola cadena, identica en train, test, validacion externa e interfaz:
+  #   mono -> remuestreo -> [ruido: solo Fase 9] -> pasa-banda -> normalizacion
+  # TARGET_SR = 8000 Hz: el minimo del dataset es 4000 Hz (Nyquist = 2000 Hz, justo
+  # el borde de la banda); a 8000 Hz el corte de 2000 Hz queda en 0,5*Nyquist.
+  target_sr: 8000
+  mono: mean                  # promedio de canales (ICBHI es mono; aplica a otros datos)
+  # Remuestreo polifasico racional (scipy.signal.resample_poly), ventana Kaiser.
+  # beta = 8 medido: banda 100-1900 Hz plana (0,000 dB); aliasing que cae en
+  # 0-2000 Hz <= -97 dB; imagenes al subir 4 kHz -> 8 kHz: -73 dB.
+  resample_kaiser_beta: 8.0
+  bandpass:
+    low_hz: 100
+    high_hz: 2000
+    order: 4                  # Butterworth orden 4 (8 polos en pasa-banda), formato SOS
+    zero_phase: true          # sosfiltfilt: sin desfase (no deforma transitorios); -6 dB en los cortes
+  normalization:
+    # rms  : divide por el RMS del ciclo ya filtrado -> invariante a la ganancia del equipo;
+    #        conserva la dinamica temporal interna (picos explosivos relativos al ciclo).
+    # peak : divide por el pico (NO recomendado: un solo transitorio fija la escala).
+    # none : conserva la amplitud absoluta (NO recomendado: codifica equipo/ganancia).
+    method: rms
+    target_level: 0.1         # RMS objetivo = 0,1 (-20 dBFS)
+    silence_rms_threshold: 1.0e-6   # RMS en banda < -120 dBFS -> silencio: no se divide
+
+features:
+  # Cada ciclo se lee y preprocesa UNA vez y de ahi salen las 4 representaciones.
+  # Todas las tramas se definen en segundos y se convierten con TARGET_SR.
+  # center = false: sin relleno artificial; cada trama contiene solo senal real.
+  representations: [mfcc, mel, wavelet, rms]
+  n_jobs: -1                    # paralelo por grabacion (joblib); -1 = todos los nucleos
+  stft:
+    window_sec: 0.064           # 512 muestras a 8 kHz -> resolucion 15,6 Hz
+    hop_sec: 0.016              # 128 muestras (75 % de solapamiento)
+    window: hann
+  mel:
+    # 64 bandas en 100-2000 Hz con n_fft = 512: ninguna banda vacia, >= 3 bins
+    # FFT por filtro (con n_fft = 256 algunas bandas tendrian 1 solo bin).
+    n_mels: 64
+    fmin_hz: 100
+    fmax_hz: 2000
+    htk: false                  # escala Mel de Slaney (librosa por defecto)
+    norm: slaney
+    power: 2.0                  # espectrograma de potencia
+    amin: 1.0e-10               # piso de potencia antes de pasar a dB (-100 dB)
+    # Vector: media y desviacion por banda del log-Mel (dB, ref = 1) -> 128
+  mfcc:
+    n_mfcc: 13                  # c0..c12, DCT-II ortonormal del MISMO log-Mel de 64 bandas
+    # Vector: media y desviacion por coeficiente -> 26 (sin delta/delta-delta)
+  wavelet:
+    name: db4
+    level: 7                    # obligatorio: si un ciclo no alcanza el nivel 7 -> error explicito
+    # Extension de bordes. Medido en 319 ciclos (sin etiquetas) contra el espectro de
+    # Welch, cuya energia < 62,5 Hz es mediana 0,03 %: 'symmetric' (defecto de pywt)
+    # pone en A7+D7 mediana 6,2 % / p95 68 % por ARTEFACTOS DE BORDE y
+    # sum(coef^2)/sum(x^2) de hasta 31; 'zero' da mediana 0,39 % / p95 1,8 % y
+    # conserva la energia (1,000). Se usa 'zero'.
+    mode: zero
+    # Vector: por sub-banda [A7, D7..D1]: media, desviacion, energia relativa,
+    # entropia de Shannon normalizada -> 8 x 4 = 32
+  rms:
+    frame_sec: 0.020            # 160 muestras a 8 kHz (resuelve transitorios de 5-15 ms)
+    hop_sec: 0.010              # 80 muestras
+    # Vector: mean, std, median, min, max, p25, p75 del RMS por trama -> 7
+  # Validacion: una caracteristica cuya desviacion entre ciclos sea menor que
+  # este valor se reporta como (casi) constante.
+  constant_std_threshold: 1.0e-10
+
+split:
+  # Particion 70/30 AGRUPADA POR PACIENTE (ningun paciente en train y test a la vez).
+  # Candidatos: GroupShuffleSplit(n_candidates, test_size, random_state) con groups =
+  # patient_id -> cada candidato envia el 30 % de los PACIENTES a test.
+  # Seleccion determinista: minimo max_k |t_k - test_size|, con t_k = fraccion de los
+  # ciclos de la etiqueta k que cae en test (las 4 etiquetas: el mismo split sirve
+  # para 3class y 4class). Desempates: |fraccion global - test_size|, suma de
+  # desviaciones, menor numero de candidato.
+  test_size: 0.30
+  n_candidates: 10000
+  # METODOLOGIA ORIGINAL: [label]. MEJORA ELEGIDA POR EL USUARIO (2026-09-26):
+  # [label, equipment] -> el mismo minimax incluye la fraccion de cada equipo en
+  # test, para que train y test tengan la misma mezcla de equipos (la auditoria
+  # mostro que AKGC417L concentra el 83 % de los crepitantes). El split con el
+  # criterio original quedo archivado en results/split_history/.
+  balance_by: [label, equipment]
+
+training:
+  # Seleccion de hiperparametros SOLO con el 70 % de train, CV agrupada por paciente.
+  scoring: f1_weighted              # metrica principal (refit de GridSearchCV)
+  cv:
+    preferred_n_splits: 10          # metodologia de la propuesta
+    fallback_n_splits: 5            # si 10 no es viable (criterio abajo, fijado a priori)
+    shuffle: true                   # StratifiedGroupKFold(shuffle, random_state del proyecto)
+    # Un plan de CV es viable si TODO fold de validacion contiene cada clase con al
+    # menos estos pacientes distintos y ciclos (evita evaluar una clase con 1 paciente).
+    min_patients_per_class_per_fold: 2
+    min_cycles_per_class_per_fold: 10
+  n_jobs: -1                        # paralelo sobre (candidato x fold) en GridSearchCV
+
+models:
+  # Cada modelo es Pipeline([("scaler", StandardScaler()), ("classifier", ...)]).
+  random_forest:
+    fixed: {n_estimators: 100}      # base inicial; el grid puede sobrescribirlo
+    grid:
+      n_estimators: [100, 300]
+      max_depth: [null, 10, 20]
+      min_samples_split: [2, 5]
+      min_samples_leaf: [1, 3]
+      max_features: [sqrt, log2]
+  svm_rbf:
+    fixed: {kernel: rbf, cache_size: 500}
+    grid:
+      C: [0.1, 1, 10, 100]
+      # 3 y 10 agregados tras un optimo en el borde (gamma = 1 en RMS); refinamiento
+      # decidido solo con la CV de train, aplicado por igual a las 4 representaciones.
+      gamma: [scale, 0.001, 0.01, 0.1, 1, 3, 10]
+    # Probabilidades para ROC/AUC e interfaz. SVC(probability=True) esta OBSOLETO en
+    # scikit-learn 1.9 (se elimina en 1.11). Se usa CalibratedClassifierCV(SVC,
+    # method="sigmoid" = Platt, ensemble=False) con folds AGRUPADOS POR PACIENTE, pero
+    # SOLO para predict_proba: la clase la decide el propio SVC (la regla evaluada en
+    # la CV). Decidir por la probabilidad calibrada colapsaba hacia NORMAL
+    # (MFCC: F1 de CV 0,426 frente a 0,508 del SVC), por eso no se usa.
+    calibration: sigmoid
+  knn:
+    fixed: {}
+    grid:
+      # 3..15 (metodologia) + 17..51 agregados tras optimos en el borde (k = 15 en
+      # MFCC y RMS); refinamiento con la CV de train, igual para las 4 representaciones.
+      n_neighbors: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 19, 21, 25, 31, 41, 51]
+      weights: [uniform, distance]
+      metric: [euclidean, manhattan]
+
+evaluation:
+  # PRE-REGISTRADO antes de abrir el test (decision del usuario 2026-09-28, opcion B):
+  # el BEST_MODEL es la combinacion del experimento principal con mayor F1 ponderada
+  # en la CV de train. Las 12 se evaluan en test UNA sola vez y se reportan todas.
+  best_model_selection: cv
+  # Modelos designados por F1 de CV ANTES de abrir el test (registrado el 2026-10-03):
+  #  - hipotesis (experimento principal, 12 combinaciones): RMS + SVM-RBF (CV 0,526)
+  #  - prototipo / mejor global entre las mejoras propuestas: voto de RF + SVM + KNN
+  #    sobre fusion + descriptores (CV 0,615)
+  # En la Fase 7 se evaluan en test TODAS las configuraciones una sola vez; estos dos
+  # son los que se reportan como "mejor modelo" de cada grupo, salga lo que salga.
+  designated_main: {representation: rms, classifier: svm_rbf}
+  designated_prototype: {variant: voting, representation: fusion_plus, classifier: vote}
+
+improvements:
+  # MEJORAS PROPUESTAS: no forman parte del experimento principal (12 combinaciones).
+  # Se evaluan SOLO con la CV de train (mismos folds), ANTES de abrir el test, y se
+  # reportan por separado. "fusion" = concatenacion de las 4 representaciones.
+  variants:
+    balanced:
+      description: "class_weight='balanced' en Random Forest y SVM-RBF (KNN no lo admite)"
+      representations: [mfcc, mel, wavelet, rms]
+      classifiers: [random_forest, svm_rbf]
+      fixed_overrides:
+        random_forest: {class_weight: balanced}
+        svm_rbf: {class_weight: balanced}
+    fusion:
+      description: "fusion de MFCC + Mel + Wavelet + RMS en un solo vector (193 caracteristicas)"
+      representations: [fusion]
+      classifiers: [random_forest, svm_rbf, knn]
+      fixed_overrides: {}
+    # --- Segunda ronda (2026-10-03), tambien solo con CV de train -------------------
+    descriptors:
+      description: "32 descriptores especificos de sibilancias (tonalidad sostenida) y crepitantes (transitorios)"
+      representations: [descriptors]
+      classifiers: [random_forest, svm_rbf, knn]
+      fixed_overrides: {}
+    fusion_plus:
+      description: "fusion de las 4 representaciones + descriptores especificos (225 caracteristicas)"
+      representations: [fusion_plus]
+      classifiers: [random_forest, svm_rbf, knn]
+      fixed_overrides: {}
+    fusion_balanced:
+      description: "fusion (193) con class_weight='balanced' en RF y SVM"
+      representations: [fusion]
+      classifiers: [random_forest, svm_rbf]
+      fixed_overrides:
+        random_forest: {class_weight: balanced}
+        svm_rbf: {class_weight: balanced}
+    fusion_plus_balanced:
+      description: "fusion + descriptores (225) con class_weight='balanced' en RF y SVM"
+      representations: [fusion_plus]
+      classifiers: [random_forest, svm_rbf]
+      fixed_overrides:
+        random_forest: {class_weight: balanced}
+        svm_rbf: {class_weight: balanced}
+
+descriptors:
+  # MEJORA PROPUESTA: descriptores calculados sobre la MISMA senal preprocesada
+  # (8 kHz, 100-2000 Hz, RMS = 0,1) y el mismo STFT de features.stft. Todos los
+  # umbrales se fijaron A PRIORI (no se ajustaron mirando etiquetas ni resultados).
+  #
+  # Sibilancias = tono sostenido: en cada trama se mide cuanto sobresale el pico mas
+  # alto del espectro respecto a su entorno (mediana movil en frecuencia). Con ruido
+  # sin tonos ese valor ronda 8-9 dB; se considera trama tonal si supera 12 dB.
+  tonal_median_filter_bins: 15      # entorno de +/- 7 bins (~ +/- 110 Hz)
+  tonal_prominence_db: 12.0
+  tonal_freq_tolerance_bins: 2      # el tono se considera el mismo si cambia <= 2 bins (~31 Hz)
+  band_edges_hz: [100, 200, 400, 800, 2000]
+  rolloff_fraction: 0.85
+  # Crepitantes = transitorios breves (5-15 ms): envolvente RMS en tramas de 5 ms;
+  # un chasquido es un maximo local que supera mediana + 4 MAD robustas.
+  envelope_frame_sec: 0.005
+  envelope_hop_sec: 0.0025
+  peak_mad_factor: 4.0
+  peak_min_distance_sec: 0.010
+  zcr_frame_sec: 0.020
+  zcr_hop_sec: 0.010
+
+robustness:
+  # FASE 9. Diseno fijado el 2026-10-07 ANTES de evaluar ninguna condicion con ruido
+  # (no se ajusto mirando resultados). Los modelos estan congelados: no se reentrena
+  # ni se cambia el filtro. Ruido blanco gaussiano, sumado DESPUES del remuestreo y
+  # ANTES del pasa-banda, a los MISMOS ciclos de test en todas las condiciones.
+  #
+  # references: sobre que senal se mide el SNR = 20*log10(RMS_senal / RMS_ruido).
+  #   fullband  METODOLOGIA ORIGINAL: senal remuestreada completa (0-4000 Hz).
+  #   inband    ANALISIS COMPLEMENTARIO: senal y ruido medidos en la banda util
+  #             (100-2000 Hz, la que deja pasar el filtro). Se anade porque, medido
+  #             SOLO en train, el pasa-banda quita ~17 dB a la senal (casi toda su
+  #             energia esta por debajo de 100 Hz) y solo ~3,6 dB al ruido blanco: un
+  #             SNR "fullband" de 20 dB equivale a unos 7 dB dentro de la banda util.
+  noise: white_gaussian
+  snr_db: [20, 10, 0]
+  references: [fullband, inband]
+  repetitions: 3                  # realizaciones independientes del ruido (semillas derivadas de random_state)
+  n_jobs: -1
+
+external_validation:
+  # FASE 10. Estrategia aprobada por el usuario el 2026-10-07 y fijada ANTES de aplicar
+  # ningun modelo al dataset de Fraiwan. Fraiwan etiqueta la grabacion completa y no
+  # trae tiempos de ciclo, asi que la validacion es POR GRABACION (aproximada):
+  #   grabacion -> ventanas consecutivas sin solape -> pipeline y modelo congelados en
+  #   cada ventana -> clase de la grabacion = la mas votada entre sus ventanas.
+  # Nada se ajusta con Fraiwan (ni escalador, ni clasificador, ni umbrales).
+  window_sec: 2.5                 # mediana de la duracion de los ciclos de TRAIN de ICBHI (2,504 s)
+  aggregation: majority_vote      # empate -> clase con mayor probabilidad media entre las empatadas
+  primary_filter: D               # diafragma (100-500 Hz): su banda cae dentro de la del proyecto (100-2000 Hz)
+  label_map:                      # etiqueta de Fraiwan -> clase del proyecto
+    "N": NORMAL
+    "E W": SIBILANCIA
+    "I E W": SIBILANCIA
+    "C": CREPITANTE
+    "Crep": CREPITANTE
+    "I C": CREPITANTE
+  excluded:                       # etiqueta de Fraiwan -> motivo de la exclusion
+    "I C E W": "crepitantes y sibilancias a la vez: equivale a AMBOS, clase excluida del modo 3class"
+    "I C B": "contiene 'B', que la leyenda del dataset no define: sin equivalente"
+    "Bronchial": "sonido bronquial: sin equivalente entre las clases del proyecto"
+  n_jobs: -1
+
+statistics:
+  # FASE 11. Bootstrap de la F1 ponderada AGRUPADO POR PACIENTE: en cada iteracion se
+  # sortean pacientes con reemplazo (no ciclos sueltos) y entran todos los ciclos de cada
+  # paciente sorteado. Asi se respeta que los ciclos de un mismo paciente no son
+  # independientes. Intervalo por percentiles. Las comparaciones entre modelos son
+  # pareadas: usan exactamente los mismos pacientes sorteados en cada iteracion.
+  n_bootstrap: 10000
+  confidence: 0.95
+
+app:
+  # FASE 12. Interfaz Streamlit: clasifica UN ciclo respiratorio por archivo. No segmenta
+  # automaticamente. Los limites de duracion salen de los ciclos de TRAIN de ICBHI.
+  default_model: prototype          # prototype (mejora propuesta, mejor por CV) | best_model (RMS + SVM-RBF)
+  min_duration_sec: 0.2             # ciclo mas corto de train
+  typical_max_duration_sec: 6.6     # percentil 99 de train (6,644 s)
+  max_duration_sec: 11.2            # ciclo mas largo de train (11,205 s)
+  clipping_warning_fraction: 0.001  # fraccion de muestras en el tope digital que dispara el aviso
+  examples_per_class: 2             # ciclos de test exportados como ejemplo (eleccion al azar con semilla)
+
+audit:
+  signal_check: true              # leer cada WAV completo (NaN/Inf, silencio, saturacion)
+  clipping_level: 0.999           # |x| >= nivel -> muestra en escala completa (1.0 = tope digital)
+  clipping_warning_fraction: 0.01 # > 1 % de muestras en el tope -> incidencia WARNING (saturacion real)
+  clipping_report_fractions: [0.0, 0.001, 0.01, 0.1]  # cortes para el resumen descriptivo
+  silence_peak_threshold: 1.0e-4  # pico |x| menor -> grabacion practicamente silenciosa

@@ -1,0 +1,9 @@
+/* Solo el marco de Streamlit; el aspecto de la aplicacion esta en instrumento.css */
+[data-testid="stHeader"] { background: transparent; height: 0; }
+[data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"] { display: none; }
+[data-testid="stMainBlockContainer"] { max-width: 1140px; padding: 2.2rem 2rem 3rem; }
+.stApp { background: #edece7; }
+
+@media (max-width: 820px) {
+  [data-testid="stMainBlockContainer"] { padding: 1.2rem 1rem 2rem; }
+}
